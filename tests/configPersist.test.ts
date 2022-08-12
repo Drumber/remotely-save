@@ -20,6 +20,8 @@ const DEFAULT_SETTINGS: RemotelySavePluginSettings = {
   onedrive: {
     username: "test 🍎 emoji",
   } as any,
+  pcloud: {
+  } as any,
   password: "password",
   serviceType: "s3",
   currLogLevel: "info",

@@ -47,6 +47,7 @@ import {
 } from "./remoteForOnedrive";
 import { DEFAULT_S3_CONFIG } from "./remoteForS3";
 import { DEFAULT_WEBDAV_CONFIG } from "./remoteForWebdav";
+import { DEFAULT_PCLOUD_CONFIG, updatePCloudLocation } from "./remoteForPCloud";
 import { RemotelySaveSettingTab } from "./settings";
 import { fetchMetadataFile, parseRemoteItems, SyncStatusType } from "./sync";
 import { doActualSync, getSyncPlan, isPasswordOk } from "./sync";
@@ -72,6 +73,7 @@ const DEFAULT_SETTINGS: RemotelySavePluginSettings = {
   webdav: DEFAULT_WEBDAV_CONFIG,
   dropbox: DEFAULT_DROPBOX_CONFIG,
   onedrive: DEFAULT_ONEDRIVE_CONFIG,
+  pcloud: DEFAULT_PCLOUD_CONFIG,
   password: "",
   serviceType: "s3",
   currLogLevel: "info",
@@ -214,6 +216,7 @@ export default class RemotelySavePlugin extends Plugin {
         this.settings.webdav,
         this.settings.dropbox,
         this.settings.onedrive,
+        this.settings.pcloud,
         this.app.vault.getName(),
         () => self.saveSettings()
       );
@@ -425,6 +428,8 @@ export default class RemotelySavePlugin extends Plugin {
       log.setLevel(this.settings.currLogLevel as any);
     }
 
+    updatePCloudLocation(this.settings.pcloud.location);
+
     await this.checkIfOauthExpires();
 
     // MUST before prepareDB()
@@ -541,6 +546,7 @@ export default class RemotelySavePlugin extends Plugin {
             undefined,
             this.settings.dropbox,
             undefined,
+            undefined,
             this.app.vault.getName(),
             () => self.saveSettings()
           );
@@ -627,6 +633,7 @@ export default class RemotelySavePlugin extends Plugin {
             undefined,
             undefined,
             this.settings.onedrive,
+            undefined,
             this.app.vault.getName(),
             () => self.saveSettings()
           );

@@ -8,12 +8,13 @@ import type { LangType, LangTypeAndAuto } from "./i18n";
 
 export const DEFAULT_CONTENT_TYPE = "application/octet-stream";
 
-export type SUPPORTED_SERVICES_TYPE = "s3" | "webdav" | "dropbox" | "onedrive";
+export type SUPPORTED_SERVICES_TYPE = "s3" | "webdav" | "dropbox" | "onedrive" | "pcloud";
 
 export type SUPPORTED_SERVICES_TYPE_WITH_REMOTE_BASE_DIR =
   | "webdav"
   | "dropbox"
-  | "onedrive";
+  | "onedrive"
+  | "pcloud";
 
 export interface S3Config {
   s3Endpoint: string;
@@ -69,11 +70,18 @@ export interface OnedriveConfig {
   remoteBaseDir?: string;
 }
 
+export interface PCloudConfig {
+  location: string;
+  accessToken: string;
+  remoteBaseDir?: string;
+}
+
 export interface RemotelySavePluginSettings {
   s3: S3Config;
   webdav: WebdavConfig;
   dropbox: DropboxConfig;
   onedrive: OnedriveConfig;
+  pcloud: PCloudConfig;
   password: string;
   serviceType: SUPPORTED_SERVICES_TYPE;
   currLogLevel?: string;

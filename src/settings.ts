@@ -43,6 +43,12 @@ import {
   DEFAULT_ONEDRIVE_CONFIG,
   getAuthUrlAndVerifier as getAuthUrlAndVerifierOnedrive,
 } from "./remoteForOnedrive";
+import {
+  createPCloudAuthorizeUrl,
+  getOAuthTokenFromCode as getAuthTokenPCloud,
+  PCLOUD_CREATE_APP_URL,
+  updatePCloudLocation
+} from "./remoteForPCloud";
 import { messyConfigToNormal } from "./configPersist";
 import type { TransItemType } from "./i18n";
 import { checkHasSpecialCharForDir } from "./misc";
@@ -340,6 +346,7 @@ class DropboxAuthModal extends Modal {
                 undefined,
                 this.plugin.settings.dropbox,
                 undefined,
+                undefined,
                 this.app.vault.getName(),
                 () => self.plugin.saveSettings()
               );
@@ -437,6 +444,169 @@ export class OnedriveAuthModal extends Modal {
       href: authUrl,
       text: authUrl,
     });
+  }
+
+  onClose() {
+    let { contentEl } = this;
+    contentEl.empty();
+  }
+}
+
+class PCloudAuthModal extends Modal {
+  readonly plugin: RemotelySavePlugin;
+  readonly authDiv: HTMLDivElement;
+  readonly revokeAuthDiv: HTMLDivElement;
+  readonly locationSetting: Setting;
+  constructor(
+    app: App,
+    plugin: RemotelySavePlugin,
+    authDiv: HTMLDivElement,
+    revokeAuthDiv: HTMLDivElement,
+    locationSetting: Setting
+  ) {
+    super(app);
+    this.plugin = plugin;
+    this.authDiv = authDiv;
+    this.revokeAuthDiv = revokeAuthDiv;
+    this.locationSetting = locationSetting;
+  }
+
+  async onOpen() {
+    let { contentEl } = this;
+
+    const t = (x: TransItemType, vars?: any) => {
+      return this.plugin.i18n.t(x, vars);
+    };
+
+    const divStep1 = contentEl.createDiv();
+    divStep1.createEl("p", { text: t("modal_pcloudauth_step1") });
+    divStep1.createEl("p").createEl("a", {
+      href: PCLOUD_CREATE_APP_URL,
+      text: PCLOUD_CREATE_APP_URL
+    });
+
+    let clientId = "";
+    let clientSecret = "";
+
+    new Setting(divStep1)
+      .setName(t("modal_pcloudauth_input_clientid"))
+      .setDesc(t("modal_pcloudauth_input_clientid_desc"))
+      .addText((text) =>
+        text
+          .setPlaceholder("")
+          .setValue(clientId)
+          .onChange((val) => {
+            clientId = val.trim();
+          })
+      );
+
+    new Setting(divStep1)
+      .setName(t("modal_pcloudauth_input_clientsecret"))
+      .setDesc(t("modal_pcloudauth_input_clientsecret_desc"))
+      .addText((text) =>
+        text
+          .setPlaceholder("")
+          .setValue(clientSecret)
+          .onChange((val) => {
+            clientSecret = val.trim();
+          })
+      );
+
+    const divStep2 = contentEl.createDiv();
+    divStep2.hide();
+    divStep2.createEl("p", { text: t("modal_pcloudauth_step2") });
+    const anchorAuthUrl = divStep2.createEl("p").createEl("a");
+
+    let authCode = "";
+    new Setting(divStep2)
+      .setName(t("modal_pcloudauth_codeinput"))
+      .setDesc(t("modal_pcloudauth_codeinput_desc"))
+      .addText((text) =>
+        text
+          .setPlaceholder("")
+          .setValue("")
+          .onChange((val) => {
+            authCode = val.trim();
+          })
+      )
+      .addButton(async (button) => {
+        button.setButtonText(t("submit"));
+        button.onClick(async () => {
+          try {
+            const authRes = await getAuthTokenPCloud(
+              authCode,
+              clientId,
+              clientSecret
+            );
+
+            this.plugin.settings.pcloud.accessToken = authRes.access_token
+            await this.plugin.saveSettings()
+
+            new Notice(
+              t("modal_pcloudauth_conn_succ")
+            );
+
+            this.authDiv.toggleClass(
+              "pcloud-auth-button-hide",
+              this.plugin.settings.pcloud.accessToken !== ""
+            );
+            this.revokeAuthDiv.toggleClass(
+              "pcloud-revoke-auth-button-hide",
+              this.plugin.settings.pcloud.accessToken === ""
+            );
+            this.locationSetting.setDisabled(this.plugin.settings.pcloud.accessToken !== "")
+
+            this.close();
+          } catch (err) {
+            console.error(err);
+            new Notice(t("modal_pcloudauth_conn_fail"));
+          }
+        });
+      });
+
+    function showStep1() {
+      divStep2.hide();
+      divStep1.show();
+    }
+
+    function showStep2() {
+      const authUrl = createPCloudAuthorizeUrl(clientId);
+      anchorAuthUrl.href = authUrl;
+      anchorAuthUrl.text = authUrl;
+
+      divStep1.hide();
+      divStep2.show();
+    }
+
+    // Next button for step 1
+    divStep1.createEl(
+      "button",
+      {
+        text: t("modal_pcloudauth_nextbutton"),
+      },
+      (el) => {
+        el.onclick = async () => {
+          if (clientId !== "" && clientSecret !== "") {
+            showStep2();
+          } else {
+            new Notice(t("modal_pcloudauth_enterclientdata_notice"));
+          }
+        };
+      }
+    );
+
+    // Back button for step 2
+    divStep2.createEl(
+      "button",
+      {
+        text: t("modal_pcloudauth_backbutton"),
+      },
+      (el) => {
+        el.onclick = async () => {
+          showStep1()
+        };
+      }
+    );
   }
 
   onClose() {
@@ -945,6 +1115,7 @@ export class RemotelySaveSettingTab extends PluginSettingTab {
               undefined,
               this.plugin.settings.dropbox,
               undefined,
+              undefined,
               this.app.vault.getName(),
               () => self.plugin.saveSettings()
             );
@@ -1059,6 +1230,7 @@ export class RemotelySaveSettingTab extends PluginSettingTab {
             undefined,
             undefined,
             this.plugin.settings.dropbox,
+            undefined,
             undefined,
             this.app.vault.getName(),
             () => self.plugin.saveSettings()
@@ -1209,6 +1381,7 @@ export class RemotelySaveSettingTab extends PluginSettingTab {
             undefined,
             undefined,
             this.plugin.settings.onedrive,
+            undefined,
             this.app.vault.getName(),
             () => self.plugin.saveSettings()
           );
@@ -1431,6 +1604,7 @@ export class RemotelySaveSettingTab extends PluginSettingTab {
             this.plugin.settings.webdav,
             undefined,
             undefined,
+            undefined,
             this.app.vault.getName(),
             () => self.plugin.saveSettings()
           );
@@ -1452,6 +1626,172 @@ export class RemotelySaveSettingTab extends PluginSettingTab {
       });
 
     //////////////////////////////////////////////////
+    // below for pCloud
+    //////////////////////////////////////////////////
+
+    const pCloudDiv = containerEl.createEl("div", { cls: "pcloud-hide" });
+    pCloudDiv.toggleClass(
+      "pcloud-hide",
+      this.plugin.settings.serviceType !== "pcloud"
+    );
+
+    pCloudDiv.createEl("h2", { text: t("settings_pcloud") });
+
+    const pCloudLongDescDiv = pCloudDiv.createEl("div", {
+      cls: "settings-long-desc",
+    });
+
+    for (const c of [
+      t("settings_pcloud_disclaimer1"),
+      t("settings_pcloud_disclaimer2"),
+    ]) {
+      pCloudLongDescDiv.createEl("p", {
+        text: c,
+        cls: "pcloud-disclaimer",
+      });
+    }
+
+    pCloudLongDescDiv.createEl("p", {
+      text: t("settings_pcloud_folder", {
+        remoteBaseDir:
+          this.plugin.settings.pcloud.remoteBaseDir ||
+          this.app.vault.getName(),
+      }),
+    });
+
+    const pCloudLocationSetting = new Setting(pCloudDiv)
+      .setName(t("settings_pcloud_server_location"))
+      .setDesc(t("settings_pcloud_server_location_desc"))
+      .setDisabled(this.plugin.settings.pcloud.accessToken !== "")
+      .addDropdown(async (dropdown) => {
+        dropdown.addOption("us", t("settings_pcloud_location_us"));
+        dropdown.addOption("eu", t("settings_pcloud_location_eu"));
+        dropdown
+          .setValue(this.plugin.settings.pcloud.location)
+          .onChange(async (val: "us" | "eu") => {
+            this.plugin.settings.pcloud.location = val;
+            updatePCloudLocation(val)
+            await this.plugin.saveSettings();
+          });
+      });
+
+    const pCloudSelectAuthDiv = pCloudDiv.createDiv();
+    const pCloudAuthDiv = pCloudSelectAuthDiv.createDiv({
+      cls: "pcloud-auth-button-hide settings-auth-related",
+    });
+    const pCloudRevokeAuthDiv = pCloudSelectAuthDiv.createDiv({
+      cls: "pcloud-revoke-auth-button-hide settings-auth-related",
+    });
+
+    new Setting(pCloudRevokeAuthDiv)
+      .setName(t("settings_pcloud_clear_auth"))
+      .setDesc(t("settings_pcloud_clear_auth_desc"))
+      .addButton(async (button) => {
+        button.setButtonText(t("settings_pcloud_clear_auth_button"));
+        button.onClick(async () => {
+          this.plugin.settings.pcloud.accessToken = ""
+          await this.plugin.saveSettings();
+          pCloudAuthDiv.toggleClass(
+            "pcloud-auth-button-hide",
+            this.plugin.settings.pcloud.accessToken !== ""
+          );
+          pCloudRevokeAuthDiv.toggleClass(
+            "pcloud-revoke-auth-button-hide",
+            this.plugin.settings.pcloud.accessToken === ""
+          );
+          pCloudLocationSetting.setDisabled(this.plugin.settings.pcloud.accessToken !== "")
+          new Notice(t("settings_pcloud_clear_auth_notice"));
+        });
+      });
+
+    new Setting(pCloudAuthDiv)
+      .setName(t("settings_pcloud_auth"))
+      .setDesc(t("settings_pcloud_auth_desc"))
+      .addButton(async (button) => {
+        button.setButtonText(t("settings_pcloud_auth"));
+        button.onClick(async () => {
+          const modal = new PCloudAuthModal(
+            this.app,
+            this.plugin,
+            pCloudAuthDiv,
+            pCloudRevokeAuthDiv,
+            pCloudLocationSetting
+          );
+          this.plugin.oauth2Info.helperModal = modal;
+          this.plugin.oauth2Info.authDiv = pCloudAuthDiv;
+          this.plugin.oauth2Info.revokeDiv = pCloudRevokeAuthDiv;
+          modal.open();
+        });
+      });
+
+    pCloudAuthDiv.toggleClass(
+      "pcloud-auth-button-hide",
+      this.plugin.settings.pcloud.accessToken !== ""
+    );
+
+    pCloudRevokeAuthDiv.toggleClass(
+      "pcloud-revoke-auth-button-hide",
+      this.plugin.settings.pcloud.accessToken === ""
+    );
+
+    let newPCloudRemoteBaseDir =
+      this.plugin.settings.pcloud.remoteBaseDir || "";
+    new Setting(pCloudDiv)
+      .setName(t("settings_remotebasedir"))
+      .setDesc(t("settings_remotebasedir_desc"))
+      .addText((text) =>
+        text
+          .setPlaceholder(this.app.vault.getName())
+          .setValue(newPCloudRemoteBaseDir)
+          .onChange((value) => {
+            newPCloudRemoteBaseDir = value.trim();
+          })
+      )
+      .addButton((button) => {
+        button.setButtonText(t("confirm"));
+        button.onClick(() => {
+          new ChangeRemoteBaseDirModal(
+            this.app,
+            this.plugin,
+            newPCloudRemoteBaseDir,
+            "pcloud"
+          ).open();
+        });
+      });
+
+    new Setting(pCloudDiv)
+      .setName(t("settings_checkonnectivity"))
+      .setDesc(t("settings_checkonnectivity_desc"))
+      .addButton(async (button) => {
+        button.setButtonText(t("settings_checkonnectivity_button"));
+        button.onClick(async () => {
+          new Notice(t("settings_checkonnectivity_checking"));
+          const self = this;
+          const client = new RemoteClient(
+            "pcloud",
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            this.plugin.settings.pcloud,
+            this.app.vault.getName(),
+            () => self.plugin.saveSettings()
+          );
+
+          const errors = { msg: "" };
+          const res = await client.checkConnectivity((err: any) => {
+            errors.msg = `${err}`;
+          });
+          if (res) {
+            new Notice(t("settings_pcloud_connect_succ"));
+          } else {
+            new Notice(t("settings_pcloud_connect_fail"));
+            new Notice(errors.msg);
+          }
+        });
+      });
+
+    //////////////////////////////////////////////////
     // below for general chooser (part 2/2)
     //////////////////////////////////////////////////
 
@@ -1465,6 +1805,7 @@ export class RemotelySaveSettingTab extends PluginSettingTab {
         dropdown.addOption("dropbox", t("settings_chooseservice_dropbox"));
         dropdown.addOption("webdav", t("settings_chooseservice_webdav"));
         dropdown.addOption("onedrive", t("settings_chooseservice_onedrive"));
+        dropdown.addOption("pcloud", t("settings_chooseservice_pcloud"));
         dropdown
           .setValue(this.plugin.settings.serviceType)
           .onChange(async (val: SUPPORTED_SERVICES_TYPE) => {
@@ -1484,6 +1825,10 @@ export class RemotelySaveSettingTab extends PluginSettingTab {
             webdavDiv.toggleClass(
               "webdav-hide",
               this.plugin.settings.serviceType !== "webdav"
+            );
+            pCloudDiv.toggleClass(
+              "pcloud-hide",
+              this.plugin.settings.serviceType !== "pcloud"
             );
             await this.plugin.saveSettings();
           });

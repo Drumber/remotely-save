@@ -2,6 +2,7 @@ import { Vault } from "obsidian";
 import type {
   DropboxConfig,
   OnedriveConfig,
+  PCloudConfig,
   S3Config,
   SUPPORTED_SERVICES_TYPE,
   WebdavConfig,
@@ -10,6 +11,7 @@ import * as dropbox from "./remoteForDropbox";
 import * as onedrive from "./remoteForOnedrive";
 import * as s3 from "./remoteForS3";
 import * as webdav from "./remoteForWebdav";
+import * as pcloud from "./remoteForPCloud";
 
 import { log } from "./moreOnLog";
 
@@ -22,6 +24,8 @@ export class RemoteClient {
   readonly dropboxConfig?: DropboxConfig;
   readonly onedriveClient?: onedrive.WrappedOnedriveClient;
   readonly onedriveConfig?: OnedriveConfig;
+  readonly pCloudClient?: pcloud.WrappedPCloudClient;
+  readonly pCloudConfig?: PCloudConfig;
 
   constructor(
     serviceType: SUPPORTED_SERVICES_TYPE,
@@ -29,6 +33,7 @@ export class RemoteClient {
     webdavConfig?: WebdavConfig,
     dropboxConfig?: DropboxConfig,
     onedriveConfig?: OnedriveConfig,
+    pCloudConfig?: PCloudConfig,
     vaultName?: string,
     saveUpdatedConfigFunc?: () => Promise<any>
   ) {
@@ -76,6 +81,19 @@ export class RemoteClient {
         remoteBaseDir,
         saveUpdatedConfigFunc
       );
+    } else if (serviceType === "pcloud") {
+      if (vaultName === undefined || saveUpdatedConfigFunc === undefined) {
+        throw Error(
+          "remember to provide vault name and callback while init pCloud client"
+        );
+      }
+      const remoteBaseDir = pCloudConfig.remoteBaseDir || vaultName;
+      this.pCloudConfig = pCloudConfig;
+      this.pCloudClient = pcloud.getPCloudClient(
+        pCloudConfig,
+        remoteBaseDir,
+        saveUpdatedConfigFunc
+      );
     } else {
       throw Error(`not supported service type ${this.serviceType}`);
     }
@@ -97,6 +115,8 @@ export class RemoteClient {
         this.onedriveClient,
         fileOrFolderPath
       );
+    } else if (this.serviceType === "pcloud") {
+      return await pcloud.getRemoteMeta(this.pCloudClient, fileOrFolderPath);
     } else {
       throw Error(`not supported service type ${this.serviceType}`);
     }
@@ -159,6 +179,18 @@ export class RemoteClient {
         uploadRaw,
         rawContent
       );
+    } else if (this.serviceType === "pcloud") {
+      return await pcloud.uploadToRemote(
+        this.pCloudClient,
+        fileOrFolderPath,
+        vault,
+        isRecursively,
+        password,
+        remoteEncryptedKey,
+        foldersCreatedBefore,
+        uploadRaw,
+        rawContent
+      );
     } else {
       throw Error(`not supported service type ${this.serviceType}`);
     }
@@ -177,6 +209,8 @@ export class RemoteClient {
       return await dropbox.listFromRemote(this.dropboxClient, prefix);
     } else if (this.serviceType === "onedrive") {
       return await onedrive.listFromRemote(this.onedriveClient, prefix);
+    } else if (this.serviceType === "pcloud") {
+      return await pcloud.listFromRemote(this.pCloudClient, prefix);
     } else {
       throw Error(`not supported service type ${this.serviceType}`);
     }
@@ -231,6 +265,16 @@ export class RemoteClient {
         remoteEncryptedKey,
         skipSaving
       );
+    } else if (this.serviceType === "pcloud") {
+      return await pcloud.downloadFromRemote(
+        this.pCloudClient,
+        fileOrFolderPath,
+        vault,
+        mtime,
+        password,
+        remoteEncryptedKey,
+        skipSaving
+      );
     } else {
       throw Error(`not supported service type ${this.serviceType}`);
     }
@@ -270,6 +314,13 @@ export class RemoteClient {
         password,
         remoteEncryptedKey
       );
+    } else if (this.serviceType === "pcloud") {
+      return await pcloud.deleteFromRemote(
+        this.pCloudClient,
+        fileOrFolderPath,
+        password,
+        remoteEncryptedKey
+      );
     } else {
       throw Error(`not supported service type ${this.serviceType}`);
     }
@@ -291,6 +342,8 @@ export class RemoteClient {
         this.onedriveClient,
         callbackFunc
       );
+    } else if (this.serviceType === "pcloud") {
+      return await pcloud.checkConnectivity(this.pCloudClient, callbackFunc);
     } else {
       throw Error(`not supported service type ${this.serviceType}`);
     }
